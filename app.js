@@ -195,11 +195,11 @@ async function openConversation(id, title) {
     $("messageInput").placeholder = "Зашифрованное сообщение...";
     $("sendForm").querySelector("button").disabled = false;
   } catch (error) {
-    $("chatSecurity").textContent = "⚠ Шифрование недоступно";
+    $("chatSecurity").textContent = "🔒 Ожидаем ключ собеседника";
     $("messageInput").disabled = true;
-    $("messageInput").placeholder = "Нельзя отправить без ключа";
+    $("messageInput").placeholder = "Собеседнику нужно один раз открыть Loon";
     $("sendForm").querySelector("button").disabled = true;
-    showNotice(error.message,true);
+    showNotice("Чат создан. Чтобы начать защищённую переписку, собеседнику нужно один раз войти в Loon с этого аккаунта и активировать ключ шифрования.",true);
   }
   await loadMessages(id);
   realtimeChannel = supabase.channel("messages-" + id)
@@ -223,10 +223,12 @@ async function loadChats() {
   const otherIds = [...new Set((allMembers || []).filter(x => x.user_id !== currentUser.id).map(x => x.user_id))];
   const { data: profiles } = otherIds.length ? await supabase.from("profiles").select("id,username,display_name").in("id", otherIds) : {data:[]};
   const profileById = new Map((profiles || []).map(x => [x.id,x]));
+  const renderedUsers = new Set();
   for (const id of ids) {
     const member = (allMembers || []).find(x => x.conversation_id === id && x.user_id !== currentUser.id);
     const profile = member ? profileById.get(member.user_id) : null;
-    if (!profile) continue;
+    if (!profile || renderedUsers.has(profile.id)) continue;
+    renderedUsers.add(profile.id);
     const { data: last } = await supabase.from("messages").select("body,created_at").eq("conversation_id",id).order("created_at",{ascending:false}).limit(1).maybeSingle();
     const button = document.createElement("button"); button.className = "chat";
     const avatar = document.createElement("span"); avatar.className = "avatar"; avatar.textContent = (profile.display_name || profile.username).slice(0,1).toUpperCase();
@@ -238,21 +240,36 @@ async function loadChats() {
     list.append(button);
   }
 }
+let userSearchRequest = 0;
 async function searchUsers(value) {
-  const results = $("contactResults"); results.replaceChildren();
+  const requestId = ++userSearchRequest;
+  const results = $("contactResults");
+  results.replaceChildren();
   const query = value.trim().replace(/^@/,"").toLowerCase();
   if (query.length < 2) return;
-  const { data, error } = await supabase.from("profiles").select("id,username,display_name").ilike("username", query + "%").neq("id",currentUser.id).limit(15);
+  const { data, error } = await supabase.from("profiles").select("id,username,display_name").ilike("username", query + "%").neq("id",currentUser.id).order("username").limit(15);
+  if (requestId !== userSearchRequest || query !== $("userSearch").value.trim().replace(/^@/,"").toLowerCase()) return;
   if (error) return showNotice(error.message,true);
-  if (!data.length) { const empty=document.createElement("div");empty.className="empty";empty.textContent="Пользователи не найдены.";results.append(empty);return; }
-  data.forEach(profile => {
+  const uniqueProfiles = [...new Map((data || []).map(profile => [profile.id,profile])).values()]
+    .filter((profile,index,all) => all.findIndex(item => item.username.toLowerCase() === profile.username.toLowerCase()) === index);
+  if (!uniqueProfiles.length) { const empty=document.createElement("div");empty.className="empty";empty.textContent="Пользователи не найдены.";results.append(empty);return; }
+  uniqueProfiles.forEach(profile => {
     const button=document.createElement("button");button.className="chat";
     const avatar=document.createElement("span");avatar.className="avatar";avatar.textContent=(profile.display_name||profile.username).slice(0,1).toUpperCase();
     const details=document.createElement("span");details.className="details";
     const name=document.createElement("div");name.className="name";name.textContent=profile.display_name||profile.username;
     const handle=document.createElement("div");handle.className="preview";handle.textContent="@"+profile.username;
     details.append(name,handle);button.append(avatar,details);
-    button.onclick=async()=>{try{const {data,error}=await supabase.rpc("open_direct_conversation",{target_username:profile.username});if(error)throw error;await loadChats();await openConversation(data,profile.display_name||"@"+profile.username);$("contactResults").replaceChildren();$("userSearch").value="";}catch(err){showNotice(err.message,true);}};
+    button.onclick=async()=>{
+      button.disabled=true;
+      try {
+        const {data:conversationId,error}=await supabase.rpc("open_direct_conversation",{target_username:profile.username});
+        if(error)throw error;
+        await loadChats();
+        await openConversation(conversationId,profile.display_name||"@"+profile.username);
+        $("contactResults").replaceChildren();$("userSearch").value="";
+      } catch(err) { showNotice("Не удалось открыть чат: "+err.message,true); button.disabled=false; }
+    };
     results.append(button);
   });
 }
