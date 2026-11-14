@@ -20,6 +20,16 @@ create table if not exists public.conversation_members (
   joined_at timestamptz not null default now(),
   primary key (conversation_id, user_id)
 );
+create table if not exists public.e2ee_devices (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  device_name text not null default 'Устройство',
+  public_key text not null,
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  revoked_at timestamptz,
+  unique(user_id, public_key)
+);
 create table if not exists public.messages (
   id bigint generated always as identity primary key,
   conversation_id uuid not null references public.conversations(id) on delete cascade,
@@ -111,7 +121,18 @@ grant execute on function public.open_direct_conversation(text) to authenticated
 alter table public.profiles enable row level security;
 alter table public.conversations enable row level security;
 alter table public.conversation_members enable row level security;
+alter table public.e2ee_devices enable row level security;
 alter table public.messages enable row level security;
+drop policy if exists "Users read own devices" on public.e2ee_devices;
+create policy "Users read own devices" on public.e2ee_devices for select to authenticated
+using (user_id = (select auth.uid()));
+drop policy if exists "Users register own devices" on public.e2ee_devices;
+create policy "Users register own devices" on public.e2ee_devices for insert to authenticated
+with check (user_id = (select auth.uid()));
+drop policy if exists "Users update own devices" on public.e2ee_devices;
+create policy "Users update own devices" on public.e2ee_devices for update to authenticated
+using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
 
 drop policy if exists "Profiles visible to signed-in users" on public.profiles;
 create policy "Profiles visible to signed-in users"
@@ -276,3 +297,5 @@ begin
   end if;
 end;
 $$;
+
+grant select, insert, update on public.e2ee_devices to authenticated;
