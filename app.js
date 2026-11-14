@@ -5,6 +5,7 @@ const validConfig = cfg.supabaseUrl?.startsWith("https://") && cfg.supabaseAnonK
 const $ = (id) => document.getElementById(id);
 const escapeText = (value) => String(value ?? "");
 let supabase = null, currentUser = null, currentProfile = null, activeConversation = null, realtimeChannel = null;
+let enteredUserId = null, enteringUserId = null;
 
 
 const encoder = new TextEncoder();
@@ -288,7 +289,7 @@ async function enterApp(session) {
   bind("signOutBtn", async () => {
     const {error} = await supabase.auth.signOut();
     if (error) return showNotice(error.message,true);
-    location.reload();
+    showNotice("Вы вышли из аккаунта.");
   });
   bind("editProfileBtn", async () => {
     const next = prompt("Как тебя показывать в Loon?", currentProfile.display_name || currentProfile.username);
@@ -326,6 +327,7 @@ async function enterApp(session) {
   bind("privacyBtn", () => showNotice("Доступ к перепискам ограничен участниками соответствующего чата. Не передавай никому пароль и коды входа."));
   bind("aboutBtn", () => showNotice("Loon · версия 0.3.1 · ранняя версия мессенджера."));
   await loadChats();
+  return true;
 }
 async function start() {
   if (!validConfig) {
@@ -333,7 +335,9 @@ async function start() {
     $("authLayer").innerHTML = '<div class="auth-card"><div class="brand"><i class="moon"></i> Loon</div><h1>Подключение сервера</h1><p class="auth-sub">Чтобы включить регистрацию и реальные чаты, создай проект Supabase и добавь URL и публичный ключ в config.js. Инструкция находится в BACKEND_SETUP.md.</p><p class="auth-foot">Локальные демонстрационные чаты отключены: Loon пока не подключён к серверу.</p></div>';
     return;
   }
-  supabase = createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);
+  supabase = createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{
+    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage}
+  });
   const tabs=[...document.querySelectorAll(".tab")],screens=[...document.querySelectorAll(".screen")];
   tabs.forEach(tab=>tab.addEventListener("click",()=>{
     tabs.forEach(item=>item.classList.toggle("active",item===tab));
@@ -341,9 +345,36 @@ async function start() {
     window.scrollTo({top:0,behavior:"smooth"});
   }));
   authScreen();
-  const {data:{session}} = await supabase.auth.getSession();
-  if (session) await enterApp(session);
-  supabase.auth.onAuthStateChange((_event,session)=>{if(session) setTimeout(()=>enterApp(session),0);});
+  const initializeSession = async (session) => {
+    if (!session) return;
+    const userId = session.user.id;
+    if (enteredUserId === userId || enteringUserId === userId) return;
+    enteringUserId = userId;
+    try {
+      const ready = await enterApp(session);
+      if (ready) enteredUserId = userId;
+    } catch (error) {
+      showNotice("Не удалось восстановить сессию: " + (error.message || error),true);
+    } finally {
+      if (enteringUserId === userId) enteringUserId = null;
+    }
+  };
+  supabase.auth.onAuthStateChange((event,session)=>{
+    if (session) {
+      setTimeout(()=>initializeSession(session),0);
+    } else if (event === "SIGNED_OUT") {
+      enteredUserId = null;
+      enteringUserId = null;
+      currentUser = null;
+      currentProfile = null;
+      activeConversation = null;
+      e2eeReady = false;
+      authScreen();
+    }
+  });
+  const {data:{session},error:sessionError} = await supabase.auth.getSession();
+  if (sessionError) showNotice("Не удалось восстановить вход: " + sessionError.message,true);
+  await initializeSession(session);
   $("backBtn").onclick=()=>{$("chatView").classList.remove("open");if(realtimeChannel){supabase.removeChannel(realtimeChannel);realtimeChannel=null;}};
   $("sendForm").onsubmit=async event=>{
     event.preventDefault();const input=$("messageInput");const plaintext=input.value.trim();
