@@ -72,7 +72,7 @@ $$;
 revoke all on function private.is_conversation_member(uuid) from public, anon;
 grant execute on function private.is_conversation_member(uuid) to authenticated;
 
-create or replace function public.open_direct_conversation(target_username text)
+create or replace function private.open_direct_conversation(target_username text)
 returns uuid
 language plpgsql
 security definer
@@ -90,10 +90,8 @@ begin
     raise exception 'Invalid username';
   end if;
 
-  select p.id into target_id
-  from public.profiles p
+  select p.id into target_id from public.profiles p
   where p.username = lower(trim(target_username));
-
   if target_id is null then raise exception 'User not found'; end if;
   if target_id = (select auth.uid()) then raise exception 'Cannot create a chat with yourself'; end if;
 
@@ -105,18 +103,25 @@ begin
     on theirs.conversation_id = c.id and theirs.user_id = target_id
   where (select count(*) from public.conversation_members cm where cm.conversation_id = c.id) = 2
   limit 1;
-
   if current_conversation is not null then return current_conversation; end if;
 
   insert into public.conversations(created_by)
-  values((select auth.uid()))
-  returning id into new_conversation;
-
+  values((select auth.uid())) returning id into new_conversation;
   insert into public.conversation_members(conversation_id, user_id)
   values(new_conversation, (select auth.uid())), (new_conversation, target_id);
-
   return new_conversation;
 end;
+$$;
+revoke all on function private.open_direct_conversation(text) from public, anon;
+grant execute on function private.open_direct_conversation(text) to authenticated;
+
+create or replace function public.open_direct_conversation(target_username text)
+returns uuid
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.open_direct_conversation(target_username);
 $$;
 revoke all on function public.open_direct_conversation(text) from public, anon;
 grant execute on function public.open_direct_conversation(text) to authenticated;
