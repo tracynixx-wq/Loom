@@ -8,6 +8,7 @@ Loon is an iPhone-first PWA messenger prototype. Android packaging can be added 
 - unique public usernames;
 - direct one-to-one conversations;
 - persistent PostgreSQL messages and live delivery via Supabase Realtime;
+- client-side end-to-end encryption for direct messages using Web Crypto (P-256 ECDH, HKDF-SHA-256, AES-256-GCM);
 - Row Level Security policies for profiles, conversations and messages;
 - GitHub Pages deployment workflow.
 
