@@ -158,32 +158,47 @@ async function enterApp(session) {
   $("authLayer").hidden = true;
   $("accountName").textContent = profile.display_name || "@" + profile.username;
   $("accountHandle").textContent = "@" + profile.username;
-  $("signOutBtn").onclick = async () => { await supabase.auth.signOut(); location.reload(); };
-  $("editProfileBtn").onclick = async () => {
+  const bind = (id, handler) => { const element = $(id); if (element) element.onclick = handler; };
+  bind("signOutBtn", async () => {
+    const {error} = await supabase.auth.signOut();
+    if (error) return showNotice(error.message,true);
+    location.reload();
+  });
+  bind("editProfileBtn", async () => {
     const next = prompt("Как тебя показывать в Loon?", currentProfile.display_name || currentProfile.username);
     if (next === null) return;
     const display_name = next.trim().slice(0,40);
     if (!display_name) return showNotice("Имя не может быть пустым.", true);
-    const { error } = await supabase.from("profiles").update({display_name}).eq("id", currentUser.id);
-    if (error) return showNotice(error.message, true);
+    const {error} = await supabase.from("profiles").update({display_name}).eq("id",currentUser.id);
+    if (error) return showNotice(error.message,true);
     currentProfile.display_name = display_name;
     $("accountName").textContent = display_name;
+    $("profileAvatar").textContent = display_name.slice(0,1).toUpperCase();
     showNotice("Имя профиля обновлено.");
-  };
-  $("notificationsBtn").onclick = async () => {
-    if (!("Notification" in window)) return showNotice("Уведомления не поддерживаются этим браузером.", true);
+  });
+  bind("notificationsBtn", async () => {
+    if (!("Notification" in window)) return showNotice("Уведомления пока не поддерживаются этим браузером.");
+    if (Notification.permission === "granted") return showNotice("Разрешение на уведомления уже включено.");
+    if (Notification.permission === "denied") return showNotice("Разреши уведомления для Loon в настройках iPhone.");
     const permission = await Notification.requestPermission();
-    showNotice(permission === "granted" ? "Уведомления разрешены." : permission === "denied" ? "Разрешение отклонено в настройках браузера." : "Разрешение пока не выдано.");
+    $("notificationValue").textContent = permission === "granted" ? "Включены" : "Настроить";
+    showNotice(permission === "granted" ? "Разрешение получено." : "Разрешение не предоставлено.");
+  });
+  const applyTheme = (theme) => {
+    document.body.classList.toggle("light",theme === "light");
+    $("themeValue").textContent = theme === "light" ? "Светлая" : "Тёмная";
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = theme === "light" ? "#f5f1fc" : "#090810";
   };
-  $("themeBtn").onclick = () => {
-    document.body.classList.toggle("light");
-    const light = document.body.classList.contains("light");
-    $("themeValue").textContent = light ? "Светлое" : "Тёмное";
-    document.querySelector('meta[name="theme-color"]').content = light ? "#f5f1fc" : "#090810";
-  };
-  $("privacyBtn").onclick = () => showNotice("Ваш профиль и переписки доступны только в рамках настроек доступа и участников чатов.");
-  $("aboutBtn").onclick = () => showNotice("Loon · версия 0.3 · ранняя версия мессенджера.");
-
+  let selectedTheme = localStorage.getItem("loon-theme") || "dark";
+  applyTheme(selectedTheme);
+  bind("themeBtn", () => {
+    selectedTheme = selectedTheme === "dark" ? "light" : "dark";
+    localStorage.setItem("loon-theme",selectedTheme);
+    applyTheme(selectedTheme);
+  });
+  bind("privacyBtn", () => showNotice("Доступ к перепискам ограничен участниками соответствующего чата. Не передавай никому пароль и коды входа."));
+  bind("aboutBtn", () => showNotice("Loon · версия 0.3.1 · ранняя версия мессенджера."));
   await loadChats();
 }
 async function start() {
@@ -193,6 +208,12 @@ async function start() {
     return;
   }
   supabase = createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);
+  const tabs=[...document.querySelectorAll(".tab")],screens=[...document.querySelectorAll(".screen")];
+  tabs.forEach(tab=>tab.addEventListener("click",()=>{
+    tabs.forEach(item=>item.classList.toggle("active",item===tab));
+    screens.forEach(screen=>screen.classList.toggle("active",screen.id===tab.dataset.screen));
+    window.scrollTo({top:0,behavior:"smooth"});
+  }));
   authScreen();
   const {data:{session}} = await supabase.auth.getSession();
   if (session) await enterApp(session);
@@ -211,8 +232,6 @@ async function start() {
   $("newBtn").onclick=()=>document.querySelector('[data-screen="contacts"]').click();
   $("searchBtn").onclick=()=>{const field=$("chatSearch");field.hidden=!field.hidden;if(!field.hidden)field.focus();};
   $("chatSearch").addEventListener("input",()=>document.querySelectorAll("#chatList .chat").forEach(c=>c.hidden=!c.textContent.toLowerCase().includes($("chatSearch").value.toLowerCase())));
-  const tabs=[...document.querySelectorAll(".tab")],screens=[...document.querySelectorAll(".screen")];
-  tabs.forEach(t=>t.addEventListener("click",()=>{tabs.forEach(x=>x.classList.toggle("active",x===t));screens.forEach(s=>s.classList.toggle("active",s.id===t.dataset.screen));}));
   if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 }
 start().catch(err=>showNotice(err.message||"Ошибка запуска",true));
