@@ -1,5 +1,5 @@
-// Public browser configuration. This key is designed for client-side use; never put service_role keys here.
-window.LOON_CONFIG = {
-  supabaseUrl: "https://votjxbtmmlubfzwlrpta.supabase.co",
-  supabaseAnonKey: "sb_publishable_BT-F-1S9IXa67Iy_Nu7apQ_4WLaVxHu"
+window.CFG = {
+  url: "https://wvxqazbylxttjrvyussq.supabase.co",
+  key: "sb_publishable_grPFr8_QXQMaRkIxJ_NNwg_pMs98Caz",
+  vapid: "BPK6w0JoxqMRsa-tT2Q2mxuv-W1ZkxtkOPD1dqST-o0DkMcK2DXkvOOMOl6fI8PDAMORMgySiUQYFOwvIiRDZ1Q"
 };
