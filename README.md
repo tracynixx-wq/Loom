@@ -11,18 +11,18 @@ Loon is an iPhone-first PWA messenger prototype. Android packaging can be added 
 - Row Level Security policies for profiles, conversations and messages;
 - GitHub Pages deployment workflow.
 
-## One-time setup required
-1. Create a free Supabase project.
-2. Run the SQL in `supabase/schema.sql` using Supabase SQL Editor.
-3. In Supabase Project Settings → API, copy the Project URL and the anon/publishable key.
-4. In GitHub repository Settings → Secrets and variables → Actions → Variables, add:
-   - `SUPABASE_URL` = the Project URL
-   - `SUPABASE_ANON_KEY` = the anon/publishable key
-5. In GitHub Settings → Pages, choose **GitHub Actions** as the build and deployment source.
-6. In Supabase Authentication → URL Configuration, set Site URL to the deployed GitHub Pages URL and add it to Redirect URLs.
-7. In Supabase Authentication settings, enable Email. Email confirmation can remain enabled; users will need to confirm their email before signing in.
+## Current backend
+- Supabase project is connected through the public browser configuration in `config.js`.
+- The publishable key is intended for browser use; never add a service_role or secret key to the repository.
+- Database schema and RLS policies are documented in `supabase/schema.sql`.
+- GitHub Actions publishes the static PWA from the repository root.
 
-After these steps, pushing to main deploys Loon automatically.
+## Deployment and authentication
+1. In GitHub Settings → Pages, choose **GitHub Actions** as the deployment source.
+2. In Supabase Authentication → URL Configuration, set Site URL to the deployed GitHub Pages URL and add that URL to Redirect URLs.
+3. Keep Email authentication enabled. If email confirmation is enabled, new users must confirm their address before signing in.
+
+After Pages is enabled, pushing to main deploys Loon automatically.
 
 ## iPhone installation
 Open the deployed HTTPS address in Safari → Share → Add to Home Screen.
