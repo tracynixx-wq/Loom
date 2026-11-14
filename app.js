@@ -110,7 +110,7 @@ async function loadChats() {
   const { data: memberships, error } = await supabase.from("conversation_members").select("conversation_id").eq("user_id", currentUser.id);
   if (error) return showNotice(error.message, true);
   if (!memberships.length) {
-    const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Пока нет чатов. Найди пользователя во вкладке «Контакты»."; list.append(empty); return;
+    const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Пока нет чатов. Найди пользователя во вкладке «Контакты»."; list.replaceChildren(empty); return;
   }
   const ids = memberships.map(x => x.conversation_id);
   const { data: allMembers } = await supabase.from("conversation_members").select("conversation_id,user_id").in("conversation_id", ids);
@@ -159,6 +159,31 @@ async function enterApp(session) {
   $("accountName").textContent = profile.display_name || "@" + profile.username;
   $("accountHandle").textContent = "@" + profile.username;
   $("signOutBtn").onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+  $("editProfileBtn").onclick = async () => {
+    const next = prompt("Как тебя показывать в Loon?", currentProfile.display_name || currentProfile.username);
+    if (next === null) return;
+    const display_name = next.trim().slice(0,40);
+    if (!display_name) return showNotice("Имя не может быть пустым.", true);
+    const { error } = await supabase.from("profiles").update({display_name}).eq("id", currentUser.id);
+    if (error) return showNotice(error.message, true);
+    currentProfile.display_name = display_name;
+    $("accountName").textContent = display_name;
+    showNotice("Имя профиля обновлено.");
+  };
+  $("notificationsBtn").onclick = async () => {
+    if (!("Notification" in window)) return showNotice("Уведомления не поддерживаются этим браузером.", true);
+    const permission = await Notification.requestPermission();
+    showNotice(permission === "granted" ? "Уведомления разрешены." : permission === "denied" ? "Разрешение отклонено в настройках браузера." : "Разрешение пока не выдано.");
+  };
+  $("themeBtn").onclick = () => {
+    document.body.classList.toggle("light");
+    const light = document.body.classList.contains("light");
+    $("themeValue").textContent = light ? "Светлое" : "Тёмное";
+    document.querySelector('meta[name="theme-color"]').content = light ? "#f5f1fc" : "#090810";
+  };
+  $("privacyBtn").onclick = () => showNotice("Ваш профиль и переписки доступны только в рамках настроек доступа и участников чатов.");
+  $("aboutBtn").onclick = () => showNotice("Loon · версия 0.3 · ранняя версия мессенджера.");
+
   await loadChats();
 }
 async function start() {
