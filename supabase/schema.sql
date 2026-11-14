@@ -10,6 +10,7 @@ create table if not exists public.profiles (
 create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
   created_by uuid not null references auth.users(id) on delete cascade,
+  direct_pair_key text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -26,6 +27,9 @@ create table if not exists public.messages (
   body text not null check (char_length(body) between 1 and 4000),
   created_at timestamptz not null default now()
 );
+
+create unique index if not exists profiles_username_lower_uidx on public.profiles (lower(username));
+create unique index if not exists conversations_direct_pair_uidx on public.conversations (direct_pair_key) where direct_pair_key is not null;
 
 create index if not exists messages_conversation_created_idx on public.messages(conversation_id, created_at desc);
 create index if not exists conversation_members_user_idx on public.conversation_members(user_id);
@@ -78,41 +82,131 @@ returns uuid
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $
 declare
   target_id uuid;
   current_conversation uuid;
   new_conversation uuid;
+  pair_key text;
+  caller_id uuid := (select auth.uid());
 begin
-  if (select auth.uid()) is null then raise exception 'Not authenticated'; end if;
+  if caller_id is null then raise exception 'Not authenticated'; end if;
   if target_username is null
      or length(trim(target_username)) not between 3 and 24
-     or lower(trim(target_username)) !~ '^[a-z0-9_]{3,24}$' then
+     or lower(trim(target_username)) !~ '^[a-z0-9_]{3,24}
+revoke all on function private.open_direct_conversation(text) from public, anon;
+grant execute on function private.open_direct_conversation(text) to authenticated;
+
+create or replace function public.open_direct_conversation(target_username text)
+returns uuid
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.open_direct_conversation(target_username);
+$$;
+revoke all on function public.open_direct_conversation(text) from public, anon;
+grant execute on function public.open_direct_conversation(text) to authenticated;
+
+alter table public.profiles enable row level security;
+alter table public.conversations enable row level security;
+alter table public.conversation_members enable row level security;
+alter table public.messages enable row level security;
+
+drop policy if exists "Profiles visible to signed-in users" on public.profiles;
+create policy "Profiles visible to signed-in users"
+on public.profiles for select to authenticated using (true);
+
+drop policy if exists "Users update own profile" on public.profiles;
+create policy "Users update own profile"
+on public.profiles for update to authenticated
+using (id = (select auth.uid()))
+with check (id = (select auth.uid()));
+
+drop policy if exists "Members read conversations" on public.conversations;
+create policy "Members read conversations"
+on public.conversations for select to authenticated
+using (private.is_conversation_member(id));
+
+drop policy if exists "Members read membership" on public.conversation_members;
+create policy "Members read membership"
+on public.conversation_members for select to authenticated
+using (private.is_conversation_member(conversation_id));
+
+drop policy if exists "Members read messages" on public.messages;
+create policy "Members read messages"
+on public.messages for select to authenticated
+using (private.is_conversation_member(conversation_id));
+
+drop policy if exists "Members send messages as themselves" on public.messages;
+create policy "Members send messages as themselves"
+on public.messages for insert to authenticated
+with check (
+  sender_id = (select auth.uid())
+  and private.is_conversation_member(conversation_id)
+);
+
+grant usage on schema public to authenticated;
+grant select on public.profiles, public.conversations, public.conversation_members, public.messages to authenticated;
+grant update(display_name, e2ee_public_key) on public.profiles to authenticated;
+grant insert on public.messages to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end;
+$$;
+ then
     raise exception 'Invalid username';
   end if;
 
-  select p.id into target_id from public.profiles p
-  where p.username = lower(trim(target_username));
+  select p.id into target_id
+  from public.profiles p
+  where lower(p.username) = lower(trim(target_username))
+  limit 1;
+
   if target_id is null then raise exception 'User not found'; end if;
-  if target_id = (select auth.uid()) then raise exception 'Cannot create a chat with yourself'; end if;
+  if target_id = caller_id then raise exception 'Cannot create a chat with yourself'; end if;
+
+  pair_key := least(caller_id::text,target_id::text) || ':' || greatest(caller_id::text,target_id::text);
 
   select c.id into current_conversation
   from public.conversations c
   join public.conversation_members mine
-    on mine.conversation_id = c.id and mine.user_id = (select auth.uid())
+    on mine.conversation_id = c.id and mine.user_id = caller_id
   join public.conversation_members theirs
     on theirs.conversation_id = c.id and theirs.user_id = target_id
   where (select count(*) from public.conversation_members cm where cm.conversation_id = c.id) = 2
+  order by c.created_at asc
   limit 1;
-  if current_conversation is not null then return current_conversation; end if;
 
-  insert into public.conversations(created_by)
-  values((select auth.uid())) returning id into new_conversation;
-  insert into public.conversation_members(conversation_id, user_id)
-  values(new_conversation, (select auth.uid())), (new_conversation, target_id);
+  if current_conversation is not null then
+    update public.conversations set direct_pair_key = pair_key
+    where id = current_conversation and direct_pair_key is null;
+    return current_conversation;
+  end if;
+
+  insert into public.conversations(created_by,direct_pair_key)
+  values(caller_id,pair_key)
+  on conflict (direct_pair_key) where direct_pair_key is not null do nothing
+  returning id into new_conversation;
+
+  if new_conversation is null then
+    select c.id into new_conversation from public.conversations c where c.direct_pair_key = pair_key;
+  else
+    insert into public.conversation_members(conversation_id,user_id)
+    values(new_conversation,caller_id),(new_conversation,target_id);
+  end if;
   return new_conversation;
 end;
-$$;
+$;
 revoke all on function private.open_direct_conversation(text) from public, anon;
 grant execute on function private.open_direct_conversation(text) to authenticated;
 
