@@ -42,6 +42,16 @@
     .chat-view{display:none;position:fixed;inset:0;z-index:10;background:var(--bg);padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);max-width:520px;margin:auto}
     .chat-view.open{display:flex;flex-direction:column}.chat-top{height:65px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)}.back{border:0;background:none;font-size:25px}.chat-top strong{flex:1}.messages{flex:1;overflow:auto;padding:18px 0;display:flex;flex-direction:column;gap:12px}.bubble{max-width:82%;padding:12px 15px;border-radius:18px;background:#211b2e;align-self:flex-start}.bubble.mine{background:linear-gradient(135deg,#8c5cf6,#6429e8);align-self:flex-end}.composer{display:flex;gap:8px;padding:10px 0 12px}.composer input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:13px;color:white}.composer button{width:48px;border:0;border-radius:50%;background:var(--purple);font-size:20px}
     .empty{padding:35px 15px;text-align:center;color:var(--muted);line-height:1.5}
+  
+    .auth-layer{position:fixed;inset:0;z-index:30;background:rgba(9,8,16,.98);display:grid;place-items:center;padding:24px;overflow:auto}
+    .auth-layer[hidden]{display:none}.auth-card{width:min(100%,420px);border:1px solid var(--line);border-radius:25px;padding:25px;background:linear-gradient(145deg,#1b1429,#100e18);box-shadow:0 20px 80px #0008}
+    .auth-card h1{font-size:27px;margin:28px 0 6px}.auth-sub,.auth-foot{color:var(--muted);line-height:1.5}.auth-switch{display:grid;grid-template-columns:1fr 1fr;background:#0d0b14;border-radius:13px;padding:4px;margin:22px 0}
+    .auth-switch button{border:0;border-radius:10px;padding:11px;background:transparent;color:var(--muted)}.auth-switch button.selected{background:#34234e;color:white}
+    .auth-card label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}.auth-card input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:#0d0b14;color:white;outline:none}
+    .auth-submit{width:100%;margin-top:20px;border:0;border-radius:13px;padding:14px;background:linear-gradient(135deg,#9b6aff,#6429e8);font-weight:700}
+    .auth-error{color:#ff9b9b;min-height:20px;font-size:13px}.auth-foot{font-size:12px;margin-top:20px}
+    .message-time{display:block;text-align:right;font-size:10px;opacity:.65;margin-top:5px}.notice{position:fixed;z-index:40;top:calc(12px + env(safe-area-inset-top));left:16px;right:16px;max-width:488px;margin:auto;padding:12px 15px;border:1px solid var(--line);border-radius:12px;background:#1b1528}
+
   </style>
 </head>
 <body>
@@ -67,10 +77,10 @@
       </div>
       <div class="community"><i class="moon"></i><div><b>Loon Community ✓</b><small>Добро пожаловать в Loon! 👋</small></div></div>
     </section>
-    <section class="screen" id="contacts"><div class="page-head">Контакты</div><input class="search" placeholder="Найти пользователя"><div class="empty">Здесь появятся ваши контакты Loon.</div></section>
+    <section class="screen" id="contacts"><div class="page-head">Контакты</div><input class="search" id="userSearch" placeholder="Поиск по @имени пользователя"><div id="contactResults"><div class="empty">Найди человека по его имени пользователя.</div></div></section>
     <section class="screen" id="discover"><div class="page-head">Интересное</div><div class="community"><i class="moon"></i><div><b>Loon Community</b><small>Новости и обновления проекта</small></div></div><div class="empty">Публичные каналы и сообщества появятся здесь.</div></section>
     <section class="screen" id="settings"><div class="page-head">Настройки</div>
-      <div class="setting"><b>Профиль</b><span>›</span></div><div class="setting"><b>Уведомления</b><span>›</span></div><div class="setting"><b>Конфиденциальность</b><span>›</span></div><div class="setting"><b>Оформление</b><span>Тёмное · Фиолетовый</span></div><div class="setting"><b>О приложении</b><span>Версия 0.1</span></div>
+      <div class="setting"><div><b id="accountName">Профиль</b><small id="accountHandle" style="display:block;color:var(--muted);margin-top:5px"></small></div><span>Аккаунт</span></div><div class="setting"><b>Уведомления</b><span>›</span></div><div class="setting"><b>Конфиденциальность</b><span>›</span></div><div class="setting"><b>Оформление</b><span>Тёмное · Фиолетовый</span></div><div class="setting"><b>О приложении</b><span>Версия 0.2</span></div><button class="setting" id="signOutBtn" style="width:100%;color:#ff9b9b">Выйти из аккаунта</button>
     </section>
   </main>
 </div>
@@ -80,31 +90,10 @@
   <button class="tab" data-screen="discover"><b>◇</b>Интересное</button>
   <button class="tab" data-screen="settings"><b>⚙</b>Настройки</button>
 </nav>
-<div class="chat-view" id="chatView">
+<div class="notice" id="notice" hidden></div>\n<div class="auth-layer" id="authLayer"></div>\n<div class="chat-view" id="chatView">
   <div class="chat-top"><button class="back" id="backBtn">‹</button><strong id="chatTitle">Чат</strong><span>⋯</span></div>
   <div class="messages" id="messages"><div class="empty">Начните общение в Loon 👋</div></div>
   <form class="composer" id="sendForm"><input id="messageInput" placeholder="Сообщение..." autocomplete="off"><button>➤</button></form>
 </div>
-<script>
-  const tabs=[...document.querySelectorAll('.tab')], screens=[...document.querySelectorAll('.screen')];
-  tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.toggle('active',x===t));screens.forEach(s=>s.classList.toggle('active',s.id===t.dataset.screen));}));
-  const view=document.getElementById('chatView');
-  const messagesEl=document.getElementById('messages');
-  let activeChat='';
-  const storageKey=name=>'loon-messages-'+name;
-  function renderMessages(){
-    const saved=JSON.parse(localStorage.getItem(storageKey(activeChat))||'[]');
-    messagesEl.replaceChildren();
-    if(!saved.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Начните общение в Loon 👋';messagesEl.append(empty);return;}
-    saved.forEach(item=>{const bubble=document.createElement('div');bubble.className='bubble'+(item.mine?' mine':'');bubble.textContent=item.text;messagesEl.append(bubble);});
-    messagesEl.scrollTop=messagesEl.scrollHeight;
-  }
-  document.querySelectorAll('.chat').forEach(c=>c.addEventListener('click',()=>{activeChat=c.dataset.name;document.getElementById('chatTitle').textContent=activeChat;renderMessages();view.classList.add('open');}));
-  document.getElementById('backBtn').onclick=()=>view.classList.remove('open');
-  document.getElementById('sendForm').addEventListener('submit',e=>{e.preventDefault();const i=document.getElementById('messageInput');const text=i.value.trim();if(!text||!activeChat)return;const saved=JSON.parse(localStorage.getItem(storageKey(activeChat))||'[]');saved.push({text,mine:true,createdAt:Date.now()});localStorage.setItem(storageKey(activeChat),JSON.stringify(saved));i.value='';renderMessages();});
-  const search=document.getElementById('chatSearch');document.getElementById('searchBtn').onclick=()=>{search.hidden=!search.hidden;if(!search.hidden)search.focus();};
-  search.addEventListener('input',()=>document.querySelectorAll('.chat').forEach(c=>c.hidden=!c.dataset.name.toLowerCase().includes(search.value.toLowerCase())));
-  document.getElementById('newBtn').onclick=()=>{document.querySelector('[data-screen="contacts"]').click();};
-  if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
-</script>
+<script src="./config.js"></script>\n<script type="module" src="./app.js"></script>
 </body></html>
