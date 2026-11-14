@@ -14,7 +14,7 @@
     :root{--bg:#090810;--panel:#14111f;--panel2:#1c172b;--line:#292238;--text:#f8f6ff;--muted:#a49bbd;--purple:#8b5cf6;--purple2:#6429e8;--green:#35d58a}
     *{box-sizing:border-box} body{margin:0;background:radial-gradient(ellipse at 80% -10%,#29144b 0,transparent 35%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
     button,input{font:inherit} button{cursor:pointer;color:inherit}
-    .app{max-width:520px;margin:auto;min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(98px + env(safe-area-inset-bottom))}
+    .app{max-width:520px;margin:auto;min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(88px + env(safe-area-inset-bottom))}
     header{height:76px;display:flex;align-items:center;justify-content:space-between}
     .brand{display:flex;align-items:center;gap:12px;font-size:29px;font-weight:800;letter-spacing:-1px}
     .moon{width:40px;height:40px;border-radius:50%;background:var(--purple);position:relative;display:inline-block}
@@ -35,10 +35,9 @@
     .screen{display:none}.screen.active{display:block}
     .page-head{font-size:27px;font-weight:800;margin:18px 0 20px}
     .search{width:100%;padding:14px 16px;border-radius:15px;border:1px solid var(--line);background:var(--panel);color:var(--text);outline:none;margin-bottom:12px}
-    .setting{padding:17px;border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-    .setting span:last-child{color:var(--muted)}
-    .bottom{position:fixed;z-index:5;bottom:calc(10px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(488px,calc(100% - 24px));padding:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;border:1px solid #332947;border-radius:25px;background:rgba(19,16,29,.94);backdrop-filter:blur(18px)}
-    .tab{border:0;background:transparent;border-radius:18px;padding:8px 2px;color:var(--muted);font-size:11px;display:grid;gap:4px;justify-items:center}.tab b{font-size:20px;font-weight:500}.tab.active{color:#b18aff;background:#2a1d42}
+    .settings-group{margin:0 0 20px}.settings-caption{margin:0 0 9px 5px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}.setting{width:100%;min-height:60px;padding:13px 15px;border:1px solid var(--line);border-radius:15px;background:var(--panel);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;text-align:left}.setting span:last-child{color:var(--muted)}.setting small{display:block;color:var(--muted);font-size:12px;margin-top:4px}.setting.action{cursor:pointer}.setting.action:active{background:var(--panel2)}.settings-note{color:var(--muted);font-size:12px;line-height:1.5;padding:4px 5px}
+    .bottom{position:fixed;z-index:5;bottom:calc(8px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(488px,calc(100% - 28px));height:70px;padding:6px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;border:1px solid #332947;border-radius:22px;background:rgba(19,16,29,.96);backdrop-filter:blur(20px);box-shadow:0 8px 30px #0005}
+    .tab{height:56px;min-width:0;border:0;background:transparent;border-radius:16px;padding:5px 2px;color:var(--muted);font-size:11px;line-height:1.1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;white-space:nowrap}.tab b{font-size:19px;line-height:20px;font-weight:500}.tab.active{color:#c2a2ff;background:#2a1d42}.tab:focus-visible{outline:2px solid var(--purple);outline-offset:1px}
     .chat-view{display:none;position:fixed;inset:0;z-index:10;background:var(--bg);padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);max-width:520px;margin:auto}
     .chat-view.open{display:flex;flex-direction:column}.chat-top{height:65px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)}.back{border:0;background:none;font-size:25px}.chat-top strong{flex:1}.messages{flex:1;overflow:auto;padding:18px 0;display:flex;flex-direction:column;gap:12px}.bubble{max-width:82%;padding:12px 15px;border-radius:18px;background:#211b2e;align-self:flex-start}.bubble.mine{background:linear-gradient(135deg,#8c5cf6,#6429e8);align-self:flex-end}.composer{display:flex;gap:8px;padding:10px 0 12px}.composer input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:13px;color:white}.composer button{width:48px;border:0;border-radius:50%;background:var(--purple);font-size:20px}
     .empty{padding:35px 15px;text-align:center;color:var(--muted);line-height:1.5}
@@ -73,12 +72,16 @@
     <section class="screen" id="contacts"><div class="page-head">Контакты</div><input class="search" id="userSearch" placeholder="Поиск по @имени пользователя"><div id="contactResults"><div class="empty">Найди человека по его имени пользователя.</div></div></section>
     <section class="screen" id="discover"><div class="page-head">Интересное</div><div class="community"><i class="moon"></i><div><b>Loon Community</b><small>Новости и обновления проекта</small></div></div><div class="empty">Публичные каналы и сообщества появятся здесь.</div></section>
     <section class="screen" id="settings"><div class="page-head">Настройки</div>
-      <div class="setting"><div><b id="accountName">Профиль</b><small id="accountHandle" style="display:block;color:var(--muted);margin-top:5px"></small></div><span>Аккаунт</span></div><div class="setting"><b>Уведомления</b><span>›</span></div><div class="setting"><b>Конфиденциальность</b><span>›</span></div><div class="setting"><b>Оформление</b><span>Тёмное · Фиолетовый</span></div><div class="setting"><b>О приложении</b><span>Версия 0.2</span></div><button class="setting" id="signOutBtn" style="width:100%;color:#ff9b9b">Выйти из аккаунта</button>
+      <div class="settings-group"><div class="settings-caption">Аккаунт</div><button class="setting action" id="editProfileBtn"><div><b id="accountName">Профиль</b><small id="accountHandle"></small></div><span>Изменить ›</span></button></div>
+      <div class="settings-group"><div class="settings-caption">Предпочтения</div><button class="setting action" id="notificationsBtn"><div><b>Уведомления</b><small>Разрешения браузера</small></div><span>›</span></button><button class="setting action" id="themeBtn"><div><b>Оформление</b><small>Внешний вид приложения</small></div><span id="themeValue">Тёмное</span></button></div>
+      <div class="settings-group"><div class="settings-caption">Безопасность</div><button class="setting action" id="privacyBtn"><div><b>Конфиденциальность</b><small>Как защищены ваши данные</small></div><span>›</span></button></div>
+      <div class="settings-group"><div class="settings-caption">Информация</div><button class="setting action" id="aboutBtn"><b>О приложении</b><span>Версия 0.3 · Loon</span></button><div class="settings-note">Loon — пространство для общения. Настройки будут расширяться по мере развития проекта.</div></div>
+      <button class="setting action" id="signOutBtn" style="color:#ff9b9b;justify-content:center">Выйти из аккаунта</button>
     </section>
   </main>
 </div>
 <nav class="bottom">
-  <button class="tab active" data-screen="chats"><b>●</b>Чаты</button>
+  <button class="tab active" data-screen="chats"><b>▤</b>Чаты</button>
   <button class="tab" data-screen="contacts"><b>♙</b>Контакты</button>
   <button class="tab" data-screen="discover"><b>◇</b>Интересное</button>
   <button class="tab" data-screen="settings"><b>⚙</b>Настройки</button>
