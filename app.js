@@ -184,6 +184,21 @@ async function loadMessages(conversationId) {
   } else for (const message of data) await renderMessage(message);
   $("messages").scrollTop = $("messages").scrollHeight;
 }
+async function refreshConversationEncryption(id) {
+  if (!id || id !== activeConversation || !$("chatView").classList.contains("open")) return;
+  try {
+    await getConversationKey(id);
+    $("chatSecurity").textContent = "🔒 Сквозное шифрование включено";
+    $("messageInput").disabled = false;
+    $("messageInput").placeholder = "Зашифрованное сообщение...";
+    $("sendForm").querySelector("button").disabled = false;
+  } catch {
+    $("chatSecurity").textContent = "🔒 Ожидаем ключ собеседника";
+    $("messageInput").disabled = false;
+    $("messageInput").placeholder = "Напиши сообщение — отправка пока недоступна";
+    $("sendForm").querySelector("button").disabled = true;
+  }
+}
 async function openConversation(id, title) {
   activeConversation = id;
   $("chatTitle").textContent = title;
@@ -197,10 +212,11 @@ async function openConversation(id, title) {
     $("sendForm").querySelector("button").disabled = false;
   } catch (error) {
     $("chatSecurity").textContent = "🔒 Ожидаем ключ собеседника";
-    $("messageInput").disabled = true;
-    $("messageInput").placeholder = "Собеседнику нужно один раз открыть Loon";
+    // Allow composing immediately; sending stays disabled until E2EE can be established.
+    $("messageInput").disabled = false;
+    $("messageInput").placeholder = "Напиши сообщение — отправка включится после активации ключа";
     $("sendForm").querySelector("button").disabled = true;
-    showNotice("Чат создан. Чтобы начать защищённую переписку, собеседнику нужно один раз войти в Loon с этого аккаунта и активировать ключ шифрования.",true);
+    showNotice("Можно написать сообщение. Для безопасной отправки собеседнику нужно один раз открыть Loon и создать ключ шифрования.",true);
   }
   await loadMessages(id);
   realtimeChannel = supabase.channel("messages-" + id)
@@ -394,6 +410,10 @@ async function start() {
   $("newBtn").onclick=()=>document.querySelector('[data-screen="contacts"]').click();
   $("searchBtn").onclick=()=>{const field=$("chatSearch");field.hidden=!field.hidden;if(!field.hidden)field.focus();};
   $("chatSearch").addEventListener("input",()=>document.querySelectorAll("#chatList .chat").forEach(c=>c.hidden=!c.textContent.toLowerCase().includes($("chatSearch").value.toLowerCase())));
+  // Recheck the peer key while a chat is open; keep any draft in the input.
+  window.setInterval(() => {
+    if (activeConversation) refreshConversationEncryption(activeConversation);
+  }, 10000);
   if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 }
 start().catch(err=>showNotice(err.message||"Ошибка запуска",true));
