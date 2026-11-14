@@ -99,11 +99,14 @@ async function decryptMessage(value,conversationId) {
   return decoder.decode(plaintext);
 }
 
+let noticeTimer;
 function showNotice(message, isError = false) {
   const el = $("notice");
   el.textContent = message;
   el.style.color = isError ? "#ff9b9b" : "#b99aff";
   el.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { el.hidden = true; }, 6500);
 }
 function authScreen() {
   $("authLayer").hidden = false;
@@ -201,6 +204,8 @@ async function refreshConversationEncryption(id) {
 }
 async function openConversation(id, title) {
   activeConversation = id;
+  document.body.classList.add("chat-open");
+  $("notice").hidden = true;
   $("chatTitle").textContent = title;
   $("chatView").classList.add("open");
   if (realtimeChannel) await supabase.removeChannel(realtimeChannel);
@@ -391,7 +396,7 @@ async function start() {
   const {data:{session},error:sessionError} = await supabase.auth.getSession();
   if (sessionError) showNotice("Не удалось восстановить вход: " + sessionError.message,true);
   await initializeSession(session);
-  $("backBtn").onclick=()=>{$("chatView").classList.remove("open");if(realtimeChannel){supabase.removeChannel(realtimeChannel);realtimeChannel=null;}};
+  $("backBtn").onclick=()=>{$("chatView").classList.remove("open");document.body.classList.remove("chat-open");activeConversation=null;if(realtimeChannel){supabase.removeChannel(realtimeChannel);realtimeChannel=null;}};
   $("sendForm").onsubmit=async event=>{
     event.preventDefault();const input=$("messageInput");const plaintext=input.value.trim();
     if(!plaintext||!activeConversation)return;
