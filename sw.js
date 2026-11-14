@@ -1,21 +1,13 @@
-const CACHE="loon-v14";
-const FILES=["./","./index.html","./manifest.webmanifest","./app.js","./config.js","./icon-192.png","./icon-512.png"];
-self.addEventListener("install",event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));
-self.addEventListener("activate",event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith("loon-")&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
-self.addEventListener("fetch",event=>{
-  if(event.request.method!=="GET")return;
-  const url=new URL(event.request.url);
-  if(url.origin!==self.location.origin)return;
-  const freshFirst=event.request.mode==="navigate"||/\/(index\.html|app\.js|config\.js|manifest\.webmanifest|sw\.js)$/.test(url.pathname);
-  if(freshFirst){
-    event.respondWith(fetch(event.request).then(response=>{
-      if(response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));}
-      return response;
-    }).catch(()=>caches.match(event.request).then(cached=>cached||caches.match("./index.html"))));
-    return;
-  }
-  event.respondWith(caches.match(event.request).then(cached=>cached||fetch(event.request).then(response=>{
-    if(response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));}
-    return response;
-  })));
-});
+const C='chat-v21',CDN='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js',A=['./','index.html','config.js','manifest.webmanifest','icon-192.png'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(async c=>{await Promise.all(A.map(u=>c.add(new Request(u,{cache:'reload'})).catch(()=>{})));await c.add(new Request(CDN,{mode:'no-cors'})).catch(()=>{})}).then(()=>self.skipWaiting()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
+self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET')return;const u=new URL(r.url);
+ if(r.url===CDN){e.respondWith(caches.match(r).then(h=>h||fetch(r).then(res=>{const cp=res.clone();caches.open(C).then(c=>c.put(r,cp));return res})));return}
+ if(u.origin!==location.origin)return;
+ e.respondWith(caches.match(r,{ignoreSearch:true}).then(hit=>{const net=fetch(r).then(res=>{if(res.ok){const cp=res.clone();caches.open(C).then(c=>c.put(r,cp))}return res}).catch(()=>hit);return hit||net}))});
+self.addEventListener('push',e=>{let d={};try{d=e.data.json()}catch(_){} 
+ e.waitUntil(self.registration.showNotification(d.title||'Чат',{body:d.body||'Новое сообщение',icon:'icon-192.png',badge:'icon-192.png',tag:'c'+(d.conv||''),renotify:true,data:{conv:d.conv}}))});
+self.addEventListener('notificationclick',e=>{e.notification.close();const conv=e.notification.data&&e.notification.data.conv;
+ e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(l=>{
+  if(l.length){l[0].postMessage({open:conv});return l[0].focus()}
+  return clients.openWindow('./'+(conv?'?c='+conv:''))}))});
