@@ -4,6 +4,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text not null unique check (username ~ '^[a-z0-9_]{3,24}$'),
   display_name text not null default '',
+  e2ee_public_key text,
   created_at timestamptz not null default now()
 );
 create table if not exists public.conversations (
@@ -166,7 +167,7 @@ with check (
 
 grant usage on schema public to authenticated;
 grant select on public.profiles, public.conversations, public.conversation_members, public.messages to authenticated;
-grant update(display_name) on public.profiles to authenticated;
+grant update(display_name, e2ee_public_key) on public.profiles to authenticated;
 grant insert on public.messages to authenticated;
 
 do $$
