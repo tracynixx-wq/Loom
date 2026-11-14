@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090810">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Loon">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>Loon — мессенджер</title>
+  <style>
+    :root{--bg:#090810;--panel:#14111f;--panel2:#1c172b;--line:#292238;--text:#f8f6ff;--muted:#a49bbd;--purple:#8b5cf6;--purple2:#6429e8;--green:#35d58a}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(ellipse at 80% -10%,#29144b 0,transparent 35%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+    button,input{font:inherit} button{cursor:pointer;color:inherit}
+    .app{max-width:520px;margin:auto;min-height:100dvh;padding:env(safe-area-inset-top) 16px calc(98px + env(safe-area-inset-bottom))}
+    header{height:76px;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;align-items:center;gap:12px;font-size:29px;font-weight:800;letter-spacing:-1px}
+    .moon{width:40px;height:40px;border-radius:50%;background:var(--purple);position:relative;display:inline-block}
+    .moon:after{content:"";position:absolute;width:31px;height:31px;border-radius:50%;background:var(--bg);top:-5px;right:-8px}
+    .actions{display:flex;gap:10px}.round{width:46px;height:46px;border:1px solid var(--line);border-radius:50%;background:#171321;font-size:24px}
+    .round.primary{background:linear-gradient(145deg,#9b6aff,#6429e8);border:0}
+    .stories{display:flex;gap:15px;overflow:auto;padding:12px 0 22px;scrollbar-width:none}.story{flex:0 0 68px;text-align:center;font-size:12px;color:var(--muted)}
+    .story-pic{width:64px;height:64px;border-radius:50%;padding:3px;margin:0 auto 7px;background:linear-gradient(135deg,#b38aff,#6328ec)}
+    .story-pic span{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:linear-gradient(145deg,#43315c,#171321);font-size:21px;color:white}
+    .story.add .story-pic{background:#201a30;border:1px solid #403458}.story.add .story-pic span{background:transparent;color:#b99aff;font-size:30px}
+    .section-title{font-size:23px;font-weight:750;margin:4px 0 14px}
+    .chat{width:100%;display:flex;align-items:center;gap:13px;padding:13px 0;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left}
+    .avatar{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;flex:0 0 58px;background:linear-gradient(145deg,#8e5bff,#3c1b76);font-weight:750;font-size:19px}
+    .details{min-width:0;flex:1}.name{font-weight:700;font-size:16px;margin-bottom:5px}.preview{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .meta{display:flex;flex-direction:column;align-items:flex-end;gap:8px;color:var(--muted);font-size:12px}.unread{background:var(--purple2);color:#fff;border-radius:20px;min-width:22px;height:22px;padding:0 6px;display:grid;place-items:center;font-weight:700}
+    .community{margin:18px 0;padding:15px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(110deg,#211535,#12101b);display:flex;align-items:center;gap:13px}
+    .community .moon{width:44px;height:44px;flex:0 0 44px}.community small{display:block;color:var(--muted);margin-top:5px}
+    .screen{display:none}.screen.active{display:block}
+    .page-head{font-size:27px;font-weight:800;margin:18px 0 20px}
+    .search{width:100%;padding:14px 16px;border-radius:15px;border:1px solid var(--line);background:var(--panel);color:var(--text);outline:none;margin-bottom:12px}
+    .setting{padding:17px;border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+    .setting span:last-child{color:var(--muted)}
+    .bottom{position:fixed;z-index:5;bottom:calc(10px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(488px,calc(100% - 24px));padding:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;border:1px solid #332947;border-radius:25px;background:rgba(19,16,29,.94);backdrop-filter:blur(18px)}
+    .tab{border:0;background:transparent;border-radius:18px;padding:8px 2px;color:var(--muted);font-size:11px;display:grid;gap:4px;justify-items:center}.tab b{font-size:20px;font-weight:500}.tab.active{color:#b18aff;background:#2a1d42}
+    .chat-view{display:none;position:fixed;inset:0;z-index:10;background:var(--bg);padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);max-width:520px;margin:auto}
+    .chat-view.open{display:flex;flex-direction:column}.chat-top{height:65px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)}.back{border:0;background:none;font-size:25px}.chat-top strong{flex:1}.messages{flex:1;overflow:auto;padding:18px 0;display:flex;flex-direction:column;gap:12px}.bubble{max-width:82%;padding:12px 15px;border-radius:18px;background:#211b2e;align-self:flex-start}.bubble.mine{background:linear-gradient(135deg,#8c5cf6,#6429e8);align-self:flex-end}.composer{display:flex;gap:8px;padding:10px 0 12px}.composer input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:13px;color:white}.composer button{width:48px;border:0;border-radius:50%;background:var(--purple);font-size:20px}
+    .empty{padding:35px 15px;text-align:center;color:var(--muted);line-height:1.5}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header><div class="brand"><i class="moon"></i> Loon</div><div class="actions"><button class="round" id="searchBtn" aria-label="Поиск">⌕</button><button class="round primary" id="newBtn" aria-label="Новый чат">＋</button></div></header>
+  <main>
+    <section class="screen active" id="chats">
+      <div class="stories">
+        <div class="story add"><div class="story-pic"><span>＋</span></div>Ваша история</div>
+        <div class="story"><div class="story-pic"><span>А</span></div>Алина</div>
+        <div class="story"><div class="story-pic"><span>Д</span></div>Данил</div>
+        <div class="story"><div class="story-pic"><span>С</span></div>София</div>
+        <div class="story"><div class="story-pic"><span>М</span></div>Макс</div>
+      </div>
+      <input class="search" id="chatSearch" placeholder="Поиск по чатам" hidden>
+      <div id="chatList">
+        <button class="chat" data-name="Данил" data-preview="Давай созвонимся позже?"><span class="avatar">Д</span><span class="details"><div class="name">Данил</div><div class="preview">Давай созвонимся позже?</div></span><span class="meta">16:32 <b class="unread">2</b></span></button>
+        <button class="chat" data-name="Лучшие 💜" data-preview="Алина: Скидываю фотку!"><span class="avatar">👥</span><span class="details"><div class="name">Лучшие 💜</div><div class="preview">Алина: Скидываю фотку!</div></span><span class="meta">15:47 <b class="unread">5</b></span></button>
+        <button class="chat" data-name="Алина" data-preview="Хорошо, жду ❤️"><span class="avatar">А</span><span class="details"><div class="name">Алина</div><div class="preview">Хорошо, жду ❤️</div></span><span class="meta">14:20</span></button>
+        <button class="chat" data-name="Учёба" data-preview="Вы: Доклад готов?"><span class="avatar">✦</span><span class="details"><div class="name">Учёба</div><div class="preview">Вы: Доклад готов?</div></span><span class="meta">13:15</span></button>
+        <button class="chat" data-name="София" data-preview="Увидимся завтра?"><span class="avatar">С</span><span class="details"><div class="name">София</div><div class="preview">Увидимся завтра?</div></span><span class="meta">12:50</span></button>
+        <button class="chat" data-name="Макс" data-preview="Ок, бро"><span class="avatar">М</span><span class="details"><div class="name">Макс</div><div class="preview">Ок, бро</div></span><span class="meta">11:33</span></button>
+      </div>
+      <div class="community"><i class="moon"></i><div><b>Loon Community ✓</b><small>Добро пожаловать в Loon! 👋</small></div></div>
+    </section>
+    <section class="screen" id="contacts"><div class="page-head">Контакты</div><input class="search" placeholder="Найти пользователя"><div class="empty">Здесь появятся ваши контакты Loon.</div></section>
+    <section class="screen" id="discover"><div class="page-head">Интересное</div><div class="community"><i class="moon"></i><div><b>Loon Community</b><small>Новости и обновления проекта</small></div></div><div class="empty">Публичные каналы и сообщества появятся здесь.</div></section>
+    <section class="screen" id="settings"><div class="page-head">Настройки</div>
+      <div class="setting"><b>Профиль</b><span>›</span></div><div class="setting"><b>Уведомления</b><span>›</span></div><div class="setting"><b>Конфиденциальность</b><span>›</span></div><div class="setting"><b>Оформление</b><span>Тёмное · Фиолетовый</span></div><div class="setting"><b>О приложении</b><span>Версия 0.1</span></div>
+    </section>
+  </main>
+</div>
+<nav class="bottom">
+  <button class="tab active" data-screen="chats"><b>●</b>Чаты</button>
+  <button class="tab" data-screen="contacts"><b>♙</b>Контакты</button>
+  <button class="tab" data-screen="discover"><b>◇</b>Интересное</button>
+  <button class="tab" data-screen="settings"><b>⚙</b>Настройки</button>
+</nav>
+<div class="chat-view" id="chatView">
+  <div class="chat-top"><button class="back" id="backBtn">‹</button><strong id="chatTitle">Чат</strong><span>⋯</span></div>
+  <div class="messages" id="messages"><div class="bubble">Привет! Это тестовый чат Loon 👋</div><div class="bubble mine">Интерфейс работает!</div></div>
+  <form class="composer" id="sendForm"><input id="messageInput" placeholder="Сообщение..." autocomplete="off"><button>➤</button></form>
+</div>
+<script>
+  const tabs=[...document.querySelectorAll('.tab')], screens=[...document.querySelectorAll('.screen')];
+  tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.toggle('active',x===t));screens.forEach(s=>s.classList.toggle('active',s.id===t.dataset.screen));}));
+  const view=document.getElementById('chatView');
+  document.querySelectorAll('.chat').forEach(c=>c.addEventListener('click',()=>{document.getElementById('chatTitle').textContent=c.dataset.name;view.classList.add('open');}));
+  document.getElementById('backBtn').onclick=()=>view.classList.remove('open');
+  document.getElementById('sendForm').addEventListener('submit',e=>{e.preventDefault();const i=document.getElementById('messageInput');if(!i.value.trim())return;const b=document.createElement('div');b.className='bubble mine';b.textContent=i.value;document.getElementById('messages').append(b);i.value='';document.getElementById('messages').scrollTop=99999;});
+  const search=document.getElementById('chatSearch');document.getElementById('searchBtn').onclick=()=>{search.hidden=!search.hidden;if(!search.hidden)search.focus();};
+  search.addEventListener('input',()=>document.querySelectorAll('.chat').forEach(c=>c.hidden=!c.dataset.name.toLowerCase().includes(search.value.toLowerCase())));
+  document.getElementById('newBtn').onclick=()=>{document.querySelector('[data-screen="contacts"]').click();};
+  if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script>
+</body></html>
