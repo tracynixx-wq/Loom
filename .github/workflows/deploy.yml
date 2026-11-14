@@ -20,14 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Create public Supabase config
-        run: |
-          cat > config.js <<'EOF'
-          window.LOON_CONFIG = {
-            supabaseUrl: "${{ vars.SUPABASE_URL }}",
-            supabaseAnonKey: "${{ vars.SUPABASE_ANON_KEY }}"
-          };
-          EOF
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
