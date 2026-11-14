@@ -203,7 +203,7 @@ async function openConversation(id, title) {
   }
   await loadMessages(id);
   realtimeChannel = supabase.channel("messages-" + id)
-    .on("postgres_changes", {event:"INSERT",schema:"public",table:"messages",filter:"conversation_id=eq." + id}, payload => {
+    .on("postgres_changes", {event:"INSERT",schema:"public",table:"messages",filter:"conversation_id=eq." + id}, async payload => {
       if (payload.new.sender_id !== currentUser.id) {
         const empty = $("messages").querySelector(".empty"); if (empty) empty.remove();
         await renderMessage(payload.new); $("messages").scrollTop = $("messages").scrollHeight;
