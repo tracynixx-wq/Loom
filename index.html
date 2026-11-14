@@ -68,6 +68,7 @@
     .auth-card label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}.auth-card input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:#0d0b14;color:white;outline:none}
     .auth-submit{width:100%;margin-top:20px;border:0;border-radius:13px;padding:14px;background:linear-gradient(135deg,#9b6aff,#6429e8);font-weight:700}
     .auth-error{color:#ff9b9b;min-height:20px;font-size:13px}.auth-foot{font-size:12px;margin-top:20px}
+    .chat-heading{display:flex;flex-direction:column;gap:3px;min-width:0}.chat-heading strong{font-size:15px}.chat-heading small{font-size:10px;color:#b99aff}.composer button:disabled,.composer input:disabled{opacity:.5}
     .message-time{display:block;text-align:right;font-size:10px;opacity:.65;margin-top:5px}.notice{position:fixed;z-index:40;top:calc(12px + env(safe-area-inset-top));left:16px;right:16px;max-width:488px;margin:auto;padding:12px 15px;border:1px solid var(--line);border-radius:12px;background:#1b1528}
 
   </style>
@@ -124,7 +125,7 @@
 <div class="notice" id="notice" hidden></div>
 <div class="auth-layer" id="authLayer"></div>
 <div class="chat-view" id="chatView">
-  <div class="chat-top"><button class="back" id="backBtn">‹</button><strong id="chatTitle">Чат</strong><span>⋯</span></div>
+  <div class="chat-top"><button class="back" id="backBtn">‹</button><div class="chat-heading"><strong id="chatTitle">Чат</strong><small id="chatSecurity">🔒 Проверка шифрования…</small></div><span>⋯</span></div>
   <div class="messages" id="messages"><div class="empty">Начните общение в Loon 👋</div></div>
   <form class="composer" id="sendForm"><input id="messageInput" placeholder="Сообщение..." autocomplete="off"><button>➤</button></form>
 </div>
