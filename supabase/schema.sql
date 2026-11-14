@@ -91,7 +91,7 @@ grant usage on schema public to authenticated;
 grant select on public.profiles,public.conversations,public.conversation_members,public.messages to authenticated;
 grant update(display_name) on public.profiles to authenticated;
 grant insert on public.messages to authenticated;
-grant execute on function public.open_direct_conversation(text) to authenticated;
+revoke all on function public.open_direct_conversation(text) from public;\ngrant execute on function public.open_direct_conversation(text) to authenticated;
 
 do $$
 begin
