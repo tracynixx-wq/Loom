@@ -6,6 +6,98 @@ const $ = (id) => document.getElementById(id);
 const escapeText = (value) => String(value ?? "");
 let supabase = null, currentUser = null, currentProfile = null, activeConversation = null, realtimeChannel = null;
 
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const conversationKeys = new Map();
+let devicePrivateKey = null, devicePublicKey = null, e2eeReady = false;
+const bytesToBase64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+const base64ToBytes = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+function openKeyDatabase() {
+  return new Promise((resolve,reject) => {
+    const request = indexedDB.open("loon-crypto",1);
+    request.onupgradeneeded = () => request.result.createObjectStore("keys");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function readDeviceKey(userId) {
+  const db = await openKeyDatabase();
+  return new Promise((resolve,reject) => {
+    const request = db.transaction("keys","readonly").objectStore("keys").get(userId);
+    request.onsuccess = () => { db.close(); resolve(request.result || null); };
+    request.onerror = () => { db.close(); reject(request.error); };
+  });
+}
+async function saveDeviceKey(userId,record) {
+  const db = await openKeyDatabase();
+  return new Promise((resolve,reject) => {
+    const tx = db.transaction("keys","readwrite");
+    tx.objectStore("keys").put(record,userId);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function ensureDeviceEncryption(profile) {
+  if (!crypto || !crypto.subtle || !indexedDB) throw new Error("На этом устройстве браузер не поддерживает локальное шифрование.");
+  const stored = await readDeviceKey(currentUser.id);
+  if (stored) {
+    devicePrivateKey = stored.privateKey;
+    devicePublicKey = stored.publicKey;
+    if (profile.e2ee_public_key && profile.e2ee_public_key !== devicePublicKey) {
+      throw new Error("Ключ аккаунта не совпадает с ключом на устройстве. Не создавай новый ключ: история защищена.");
+    }
+  } else if (profile.e2ee_public_key) {
+    throw new Error("Ключ этого аккаунта уже создан на другом устройстве. Перенос и восстановление ключа пока не поддерживаются.");
+  } else {
+    const pair = await crypto.subtle.generateKey({name:"ECDH",namedCurve:"P-256"},true,["deriveBits"]);
+    const publicRaw = await crypto.subtle.exportKey("raw",pair.publicKey);
+    const privateRaw = await crypto.subtle.exportKey("pkcs8",pair.privateKey);
+    devicePrivateKey = await crypto.subtle.importKey("pkcs8",privateRaw,{name:"ECDH",namedCurve:"P-256"},false,["deriveBits"]);
+    devicePublicKey = bytesToBase64(publicRaw);
+    await saveDeviceKey(currentUser.id,{privateKey:devicePrivateKey,publicKey:devicePublicKey});
+  }
+  if (!profile.e2ee_public_key) {
+    const {error} = await supabase.from("profiles").update({e2ee_public_key:devicePublicKey}).eq("id",currentUser.id);
+    if (error) throw new Error("Не удалось сохранить открытый ключ: " + error.message);
+  }
+  e2eeReady = true;
+}
+async function getConversationKey(conversationId) {
+  if (conversationKeys.has(conversationId)) return conversationKeys.get(conversationId);
+  if (!e2eeReady || !devicePrivateKey) throw new Error("Шифрование на этом устройстве не настроено.");
+  const {data:members,error:membersError} = await supabase.from("conversation_members").select("user_id").eq("conversation_id",conversationId);
+  if (membersError) throw membersError;
+  const peer = (members || []).find(member => member.user_id !== currentUser.id);
+  if (!peer) throw new Error("Не найден второй участник чата.");
+  const {data:profile,error} = await supabase.from("profiles").select("e2ee_public_key").eq("id",peer.user_id).single();
+  if (error) throw error;
+  if (!profile || !profile.e2ee_public_key) throw new Error("У собеседника ещё не настроено шифрование. Попроси его открыть Loon на своём устройстве.");
+  const publicKey = await crypto.subtle.importKey("raw",base64ToBytes(profile.e2ee_public_key),{name:"ECDH",namedCurve:"P-256"},false,[]);
+  const shared = await crypto.subtle.deriveBits({name:"ECDH",public:publicKey},devicePrivateKey,256);
+  const hkdfKey = await crypto.subtle.importKey("raw",shared,"HKDF",false,["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    {name:"HKDF",hash:"SHA-256",salt:encoder.encode(conversationId),info:encoder.encode("Loon E2EE v1")},
+    hkdfKey,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]
+  );
+  conversationKeys.set(conversationId,key);
+  return key;
+}
+async function encryptMessage(plaintext,conversationId) {
+  const key = await getConversationKey(conversationId);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({name:"AES-GCM",iv},key,encoder.encode(plaintext));
+  return "LOON1." + bytesToBase64(iv) + "." + bytesToBase64(ciphertext);
+}
+async function decryptMessage(value,conversationId) {
+  if (!value.startsWith("LOON1.")) return value;
+  const parts = value.split(".");
+  if (parts.length !== 3) throw new Error("Неверный формат сообщения.");
+  const key = await getConversationKey(conversationId);
+  const plaintext = await crypto.subtle.decrypt({name:"AES-GCM",iv:base64ToBytes(parts[1])},key,base64ToBytes(parts[2]));
+  return decoder.decode(plaintext);
+}
+
 function showNotice(message, isError = false) {
   const el = $("notice");
   el.textContent = message;
@@ -71,10 +163,11 @@ function authScreen() {
   };
 }
 
-function renderMessage(message) {
+async function renderMessage(message) {
   const bubble = document.createElement("div");
   bubble.className = "bubble" + (message.sender_id === currentUser.id ? " mine" : "");
-  bubble.textContent = message.body;
+  try { bubble.textContent = await decryptMessage(message.body,message.conversation_id); }
+  catch { bubble.textContent = "🔒 Не удалось расшифровать: ключ может быть на другом устройстве."; }
   const stamp = document.createElement("small");
   stamp.className = "message-time";
   stamp.textContent = new Date(message.created_at).toLocaleTimeString("ru-RU", {hour:"2-digit",minute:"2-digit"});
@@ -87,7 +180,7 @@ async function loadMessages(conversationId) {
   $("messages").replaceChildren();
   if (!data.length) {
     const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "Начните общение в Loon 👋"; $("messages").append(empty);
-  } else data.forEach(renderMessage);
+  } else for (const message of data) await renderMessage(message);
   $("messages").scrollTop = $("messages").scrollHeight;
 }
 async function openConversation(id, title) {
@@ -95,12 +188,25 @@ async function openConversation(id, title) {
   $("chatTitle").textContent = title;
   $("chatView").classList.add("open");
   if (realtimeChannel) await supabase.removeChannel(realtimeChannel);
+  try {
+    await getConversationKey(id);
+    $("chatSecurity").textContent = "🔒 Сквозное шифрование включено";
+    $("messageInput").disabled = false;
+    $("messageInput").placeholder = "Зашифрованное сообщение...";
+    $("sendForm").querySelector("button").disabled = false;
+  } catch (error) {
+    $("chatSecurity").textContent = "⚠ Шифрование недоступно";
+    $("messageInput").disabled = true;
+    $("messageInput").placeholder = "Нельзя отправить без ключа";
+    $("sendForm").querySelector("button").disabled = true;
+    showNotice(error.message,true);
+  }
   await loadMessages(id);
   realtimeChannel = supabase.channel("messages-" + id)
     .on("postgres_changes", {event:"INSERT",schema:"public",table:"messages",filter:"conversation_id=eq." + id}, payload => {
       if (payload.new.sender_id !== currentUser.id) {
         const empty = $("messages").querySelector(".empty"); if (empty) empty.remove();
-        renderMessage(payload.new); $("messages").scrollTop = $("messages").scrollHeight;
+        await renderMessage(payload.new); $("messages").scrollTop = $("messages").scrollHeight;
       }
     }).subscribe();
 }
@@ -126,7 +232,7 @@ async function loadChats() {
     const avatar = document.createElement("span"); avatar.className = "avatar"; avatar.textContent = (profile.display_name || profile.username).slice(0,1).toUpperCase();
     const details = document.createElement("span"); details.className = "details";
     const name = document.createElement("div"); name.className = "name"; name.textContent = profile.display_name || "@" + profile.username;
-    const preview = document.createElement("div"); preview.className = "preview"; preview.textContent = last?.body || "Начните общение";
+    const preview = document.createElement("div"); preview.className = "preview"; preview.textContent = last?.body ? (last.body.startsWith("LOON1.") ? "🔒 Зашифрованное сообщение" : last.body) : "Начните общение";
     details.append(name,preview); button.append(avatar,details);
     button.onclick = () => openConversation(id, profile.display_name || "@" + profile.username);
     list.append(button);
@@ -152,9 +258,12 @@ async function searchUsers(value) {
 }
 async function enterApp(session) {
   currentUser = session.user;
-  const { data: profile, error } = await supabase.from("profiles").select("id,username,display_name").eq("id",currentUser.id).single();
+  const { data: profile, error } = await supabase.from("profiles").select("id,username,display_name,e2ee_public_key").eq("id",currentUser.id).single();
   if (error) { showNotice("Профиль не найден: " + error.message,true); return; }
   currentProfile = profile;
+  try { await ensureDeviceEncryption(profile); showNotice("🔒 Шифрование настроено на этом устройстве."); }
+  catch (cryptoError) { e2eeReady = false; showNotice(cryptoError.message,true); }
+  $("profileAvatar").textContent = (profile.display_name || profile.username).slice(0,1).toUpperCase();
   $("authLayer").hidden = true;
   $("accountName").textContent = profile.display_name || "@" + profile.username;
   $("accountHandle").textContent = "@" + profile.username;
@@ -220,12 +329,17 @@ async function start() {
   supabase.auth.onAuthStateChange((_event,session)=>{if(session) setTimeout(()=>enterApp(session),0);});
   $("backBtn").onclick=()=>{$("chatView").classList.remove("open");if(realtimeChannel){supabase.removeChannel(realtimeChannel);realtimeChannel=null;}};
   $("sendForm").onsubmit=async event=>{
-    event.preventDefault();const input=$("messageInput");const body=input.value.trim();
-    if(!body||!activeConversation)return;
-    const {data,error}=await supabase.from("messages").insert({conversation_id:activeConversation,sender_id:currentUser.id,body}).select("id,conversation_id,sender_id,body,created_at").single();
-    if(error)return showNotice(error.message,true);
-    const empty=$("messages").querySelector(".empty");if(empty)empty.remove();
-    renderMessage(data);input.value="";$("messages").scrollTop=$("messages").scrollHeight;
+    event.preventDefault();const input=$("messageInput");const plaintext=input.value.trim();
+    if(!plaintext||!activeConversation)return;
+    const submit=$("sendForm").querySelector("button");submit.disabled=true;
+    try {
+      const body=await encryptMessage(plaintext,activeConversation);
+      const {data,error}=await supabase.from("messages").insert({conversation_id:activeConversation,sender_id:currentUser.id,body}).select("id,conversation_id,sender_id,body,created_at").single();
+      if(error)throw error;
+      const empty=$("messages").querySelector(".empty");if(empty)empty.remove();
+      await renderMessage(data);input.value="";$("messages").scrollTop=$("messages").scrollHeight;
+    } catch(error) { showNotice("Сообщение не отправлено: "+error.message,true); }
+    finally { submit.disabled=false; }
   };
   let searchTimer;
   $("userSearch").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchUsers($("userSearch").value),250);});
